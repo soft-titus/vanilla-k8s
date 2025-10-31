@@ -1,0 +1,55 @@
+- name: Setup HAProxy as kube-apiserver load balancer
+  hosts: k8s-lb
+  become: yes
+  vars_files:
+    - ../vars.yaml
+
+  tasks:
+    - name: Install HAProxy
+      apt:
+        name: haproxy
+        state: present
+        update_cache: yes
+
+    - name: Configure HAProxy for kube-apiserver load balancing
+      copy:
+        dest: /etc/haproxy/haproxy.cfg
+        content: |
+          global
+              log /dev/log    local0
+              log /dev/log    local1 notice
+              daemon
+              maxconn 2000
+
+          defaults
+              log     global
+              mode    tcp
+              option  tcplog
+              option  dontlognull
+              timeout connect 10s
+              timeout client  1m
+              timeout server  1m
+
+          frontend kube_apiserver_frontend
+              bind {{ load_balancer_ip }}:{{ kube_apiserver_port }}
+              default_backend kube_apiserver_backend
+
+          backend kube_apiserver_backend
+              balance roundrobin
+          {% for node in control_plane_nodes %}
+              server {{ node.name }} {{ node.ip }}:{{ kube_apiserver_port }} check fall 3 rise 2
+          {% endfor %}
+      notify:
+        - Restart HAProxy
+
+    - name: Enable and start HAProxy service
+      systemd:
+        name: haproxy
+        enabled: yes
+        state: started
+
+  handlers:
+    - name: Restart HAProxy
+      systemd:
+        name: haproxy
+        state: restarted

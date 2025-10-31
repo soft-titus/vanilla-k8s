@@ -1,0 +1,38 @@
+    - name: Check if Calico is already installed
+      command: kubectl get daemonset calico-node -n kube-system
+      register: calico_ds
+      ignore_errors: yes
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Download Calico manifest
+      get_url:
+        url: "https://raw.githubusercontent.com/projectcalico/calico/master/manifests/calico.yaml"
+        dest: /tmp/calico.yaml
+      when: calico_ds.rc != 0
+
+    - name: Apply Calico manifest
+      command: kubectl apply -f /tmp/calico.yaml
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      when: calico_ds.rc != 0
+
+    - name: Wait for Calico pods to be ready
+      command: kubectl -n kube-system rollout status daemonset/calico-node
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      retries: 20
+      delay: 15
+      register: calico_rollout
+      until: calico_rollout.rc == 0
+      when: calico_ds.rc != 0
+
+    - name: Get Calico status
+      shell: kubectl get pods -n kube-system | grep "calico"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: calico_status
+
+    - name: Show Calico status
+      debug:
+        var: calico_status.stdout

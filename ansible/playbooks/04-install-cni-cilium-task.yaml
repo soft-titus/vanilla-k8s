@@ -1,0 +1,53 @@
+    - name: Check if Cilium is already installed
+      command: kubectl get daemonset cilium -n kube-system
+      register: cilium_ds
+      ignore_errors: yes
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Download Cilium CLI
+      get_url:
+        url: https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz
+        dest: /tmp/cilium.tar.gz
+      when: cilium_ds.rc != 0
+
+    - name: Extract Cilium CLI
+      unarchive:
+        src: /tmp/cilium.tar.gz
+        dest: /tmp/
+        remote_src: yes
+      when: cilium_ds.rc != 0
+
+    - name: Move Cilium binary to /usr/local/bin
+      copy:
+        src: /tmp/cilium
+        dest: /usr/local/bin/cilium
+        remote_src: yes
+        mode: '0755'
+      when: cilium_ds.rc != 0
+
+    - name: Install Cilium CNI using CLI
+      command: cilium install
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      when: cilium_ds.rc != 0
+
+    - name: Wait for Cilium pods to be ready
+      command: kubectl -n kube-system rollout status daemonset/cilium
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      retries: 20
+      delay: 15
+      register: cilium_rollout
+      until: cilium_rollout.rc == 0
+      when: cilium_ds.rc != 0
+
+    - name: Get Cilium status
+      command: cilium status --verbose
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: cilium_status
+
+    - name: Show Cilium status
+      debug:
+        var: cilium_status.stdout

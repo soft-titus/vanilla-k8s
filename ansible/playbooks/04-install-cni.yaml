@@ -1,0 +1,13 @@
+- name: Install selected CNI plugin
+  hosts: k8s_masters[0]
+  become: true
+  vars_files:
+    - ../vars.yaml
+
+  vars:
+    kubeconfig: /etc/kubernetes/admin.conf
+
+  tasks:
+
+    - name: "Install CNI ({{ cni_plugin }})"
+      include_tasks: "04-install-cni-{{ cni_plugin }}-task.yaml"

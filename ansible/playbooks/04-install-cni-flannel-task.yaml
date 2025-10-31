@@ -1,0 +1,38 @@
+    - name: Check if Flannel is already installed
+      command: kubectl get daemonset kube-flannel-ds -n kube-flannel
+      register: flannel_ds
+      ignore_errors: yes
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Download Flannel manifest
+      get_url:
+        url: "https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml"
+        dest: /tmp/kube-flannel.yml
+      when: flannel_ds.rc != 0
+
+    - name: Apply Flannel manifest
+      command: kubectl apply -f /tmp/kube-flannel.yml
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      when: flannel_ds.rc != 0
+
+    - name: Wait for Flannel pods to be ready
+      command: kubectl -n kube-flannel rollout status daemonset/kube-flannel-ds
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      retries: 20
+      delay: 15
+      register: flannel_rollout
+      until: flannel_rollout.rc == 0
+      when: flannel_ds.rc != 0
+
+    - name: Get Flannel status
+      command: kubectl get pods -n kube-flannel -l app=flannel
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: flannel_status
+
+    - name: Show Flannel status
+      debug:
+        var: flannel_status.stdout

@@ -1,0 +1,6 @@
+# Ignore generated Ansible inventory and vars
+ansible/hosts.ini
+ansible/vars.yaml
+
+# Ignore local environment configuration
+cluster.env

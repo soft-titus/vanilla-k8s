@@ -1,0 +1,36 @@
+- name: Initialize Kubernetes First Control Plane Node
+  hosts: k8s_masters[0]
+  become: true
+  vars_files:
+    - ../vars.yaml
+  vars:
+    kubeadm_control_plane_endpoint: "{{ load_balancer_ip }}:{{ kube_apiserver_port }}"
+    kubeadm_pod_network_cidr: "{{ pod_cidr }}"
+
+  tasks:
+
+    - name: Initialize Kubernetes control plane
+      shell: |
+        kubeadm init \
+          --control-plane-endpoint {{ kubeadm_control_plane_endpoint }} \
+          --upload-certs \
+          --pod-network-cidr {{ pod_cidr }}
+      args:
+        creates: /etc/kubernetes/admin.conf
+
+    - name: Ensure ubuntu .kube directory exists
+      file:
+        path: /home/ubuntu/.kube
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0700'
+
+    - name: Copy kubeconfig to ubuntu user
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/ubuntu/.kube/config
+        owner: ubuntu
+        group: ubuntu
+        mode: '0600'
+        remote_src: yes

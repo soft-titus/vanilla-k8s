@@ -1,0 +1,69 @@
+- name: Add worker nodes
+  hosts: k8s_workers
+  become: yes
+  vars:
+    kubeconfig: /etc/kubernetes/admin.conf
+    kube_home: /home/ubuntu
+    kube_dir: "{{ kube_home }}/.kube"
+
+  tasks:
+
+    - name: Upload certificates on first master and get certificate key
+      delegate_to: "{{ groups['k8s_masters'][0] }}"
+      shell: kubeadm init phase upload-certs --upload-certs | sed -n '3p'
+      register: cert_key
+      changed_when: false
+      run_once: true
+      
+    - name: Generate join command for worker nodes
+      delegate_to: "{{ groups['k8s_masters'][0] }}"
+      shell: kubeadm token create --print-join-command
+      register: join_command
+      changed_when: false
+      run_once: true
+
+    - name: Get current nodes in cluster
+      delegate_to: "{{ groups['k8s_masters'][0] }}"
+      shell: kubectl get nodes -o name
+      register: node_check
+      changed_when: false
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      run_once: true
+
+    - name: Check if this node is already part of the cluster
+      set_fact:
+        node_already_joined: "{{ 'node/' + inventory_hostname in node_check.stdout_lines }}"
+        
+    - name: Skip adding the node if it is already part of the cluster
+      debug:
+        msg: "Node {{ inventory_hostname }} is already part of the cluster."
+      when: node_already_joined
+
+    - name: Add the node as worker node
+      command: "{{ join_command.stdout }}"
+      when: not node_already_joined
+
+    - name: Ensure .kube directory exists
+      file:
+        path: "{{ kube_dir }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0700'
+
+    - name: Copy kubeconfig from first master to worker
+      delegate_to: "{{ groups['k8s_masters'][0] }}"
+      fetch:
+        src: "{{ kubeconfig }}"
+        dest: "/tmp/admin.conf"
+        flat: yes
+      run_once: true
+
+    - name: Copy kubeconfig to worker node
+      copy:
+        src: /tmp/admin.conf
+        dest: "{{ kube_dir }}/config"
+        owner: ubuntu
+        group: ubuntu
+        mode: '0600'

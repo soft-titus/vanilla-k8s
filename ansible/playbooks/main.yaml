@@ -1,0 +1,7 @@
+- import_playbook: 01-setup-load-balancer.yaml
+- import_playbook: 02-prepare-k8s-nodes.yaml
+- import_playbook: 03-initialize-k8s-cluster.yaml
+- import_playbook: 04-install-cni.yaml
+- import_playbook: 05-add-additional-master-nodes.yaml
+- import_playbook: 06-add-worker-nodes.yaml
+- import_playbook: 07-install-additional-tools.yaml

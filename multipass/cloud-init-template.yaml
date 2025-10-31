@@ -1,0 +1,48 @@
+#cloud-config
+
+# This cloud-config file sets up a basic Ubuntu node with essential packages,
+# enables SSH access, and configures a static network interface using Netplan.
+
+
+# Update and upgrade all packages on first boot
+package_update: true
+package_upgrade: true
+
+# Install essential packages
+packages:
+  - python3
+  - python3-pip
+  - curl
+  - git
+
+# Configure SSH access
+# Adds the provided SSH public key to allow passwordless SSH login
+ssh_authorized_keys:
+  - ${SSH_PUBLIC_KEY}
+
+# Write custom Netplan configuration
+# Configures a static IP for the network interface matched by MAC address
+# The route to the Kubernetes pod CIDR uses 'via: 0.0.0.0', meaning no gateway is needed
+# and traffic will be sent directly over the interface (link-local routing)
+write_files:
+  - path: /etc/netplan/10-custom.yaml
+    owner: root:root
+    permissions: "0644"
+    content: |
+      network:
+        version: 2
+        ethernets:
+          extra0:
+            dhcp4: no
+            match:
+              macaddress: "${MAC_ADDRESS}"
+            addresses:
+              - ${NODE_IP_ADDRESS}/24
+            routes:
+              - to: ${K8S_POD_CIDR}
+                via: 0.0.0.0
+                scope: link
+
+# Apply the Netplan configuration during first boot
+runcmd:
+  - netplan apply

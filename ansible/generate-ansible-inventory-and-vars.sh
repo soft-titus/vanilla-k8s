@@ -75,6 +75,7 @@ CONTROL_PLANE_NODES=()
 POD_CIDR="${K8S_POD_CIDR}"
 KUBE_VERSION="${KUBE_VERSION}"
 CNI_PLUGIN="${CNI_PLUGIN}"
+INSTALL_METRICS_SERVER="${INSTALL_METRICS_SERVER}"
 INSTALL_HELM="${INSTALL_HELM}"
 INSTALL_FLUX="${INSTALL_FLUX}"
 
@@ -103,6 +104,8 @@ kube_apiserver_port: 6443
 
 control_plane_nodes:
 $(printf '  %s\n' "${CONTROL_PLANE_NODES[@]}")
+
+install_metrics_server: $INSTALL_METRICS_SERVER
 
 install_helm: $INSTALL_HELM
 install_flux: $INSTALL_FLUX

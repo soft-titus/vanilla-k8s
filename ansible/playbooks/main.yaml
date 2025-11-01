@@ -4,3 +4,4 @@
 - import_playbook: 04-install-cni.yaml
 - import_playbook: 05-add-additional-master-nodes.yaml
 - import_playbook: 06-add-worker-nodes.yaml
+- import_playbook: 07-install-metrics-server.yaml

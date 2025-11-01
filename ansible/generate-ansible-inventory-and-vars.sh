@@ -75,6 +75,8 @@ CONTROL_PLANE_NODES=()
 POD_CIDR="${K8S_POD_CIDR}"
 KUBE_VERSION="${KUBE_VERSION}"
 CNI_PLUGIN="${CNI_PLUGIN}"
+INSTALL_HELM="${INSTALL_HELM}"
+INSTALL_FLUX="${INSTALL_FLUX}"
 
 for NODE in "${NODES[@]}"; do
   read -r NAME MAC IP CPU MEM DISK <<< "$NODE"
@@ -98,8 +100,12 @@ cni_plugin: "$CNI_PLUGIN"
 pod_cidr: "$POD_CIDR"
 load_balancer_ip: "$LOAD_BALANCER_IP"
 kube_apiserver_port: 6443
+
 control_plane_nodes:
 $(printf '  %s\n' "${CONTROL_PLANE_NODES[@]}")
+
+install_helm: $INSTALL_HELM
+install_flux: $INSTALL_FLUX
 EOF
 
 echo "Generated Ansible vars file: ${VARS_OUTPUT_PATH}"

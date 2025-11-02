@@ -73,6 +73,7 @@ echo "Generating Ansible vars file..."
 LOAD_BALANCER_IP=""
 CONTROL_PLANE_NODES=()
 HAPROXY_VERSION="${HAPROXY_VERSION}"
+CONTAINERD_VERSION="${CONTAINERD_VERSION}"
 POD_CIDR="${K8S_POD_CIDR}"
 KUBE_VERSION="${KUBE_VERSION}"
 CNI_PLUGIN="${CNI_PLUGIN}"
@@ -107,6 +108,7 @@ control_plane_nodes:
 $(printf '  %s\n' "${CONTROL_PLANE_NODES[@]}")
 
 haproxy_version: "$HAPROXY_VERSION"
+containerd_version: "$CONTAINERD_VERSION"
 
 install_metrics_server: $INSTALL_METRICS_SERVER
 

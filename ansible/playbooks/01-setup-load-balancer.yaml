@@ -5,11 +5,21 @@
     - ../vars.yaml
 
   tasks:
-    - name: Install HAProxy
+  
+    - name: Install HAProxy (latest)
       apt:
         name: haproxy
+        state: latest
+        update_cache: yes
+      when: haproxy_version == "latest"
+        
+    - name: "Install HAProxy ({{ haproxy_version }})"
+      apt:
+        name: "haproxy={{ haproxy_version }}"
+        allow_downgrade: yes
         state: present
         update_cache: yes
+      when: haproxy_version != "latest"
 
     - name: Configure HAProxy for kube-apiserver load balancing
       copy:

@@ -103,8 +103,10 @@ cat > "$VARS_OUTPUT_PATH" <<EOF
 # DO NOT edit manually!
 
 kube_version: "$KUBE_VERSION"
+
 cni_plugin: "$CNI_PLUGIN"
 flannel_version: "$FLANNEL_VERSION"
+
 pod_cidr: "$POD_CIDR"
 load_balancer_ip: "$LOAD_BALANCER_IP"
 kube_apiserver_port: 6443
@@ -119,9 +121,10 @@ install_metrics_server: $INSTALL_METRICS_SERVER
 metrics_server_version: "$METRICS_SERVER_VERSION"
 
 install_helm: $INSTALL_HELM
-helm_version: $HELM_VERSION
+helm_version: "$HELM_VERSION"
+
 install_flux: $INSTALL_FLUX
-flux_version: $FLUX_VERSION
+flux_version: "$FLUX_VERSION"
 EOF
 
 echo "Generated Ansible vars file: ${VARS_OUTPUT_PATH}"

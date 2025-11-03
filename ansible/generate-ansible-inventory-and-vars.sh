@@ -81,6 +81,7 @@ INSTALL_METRICS_SERVER="${INSTALL_METRICS_SERVER}"
 INSTALL_HELM="${INSTALL_HELM}"
 HELM_VERSION="${HELM_VERSION}"
 INSTALL_FLUX="${INSTALL_FLUX}"
+FLUX_VERSION="${FLUX_VERSION}"
 
 for NODE in "${NODES[@]}"; do
   read -r NAME MAC IP CPU MEM DISK <<< "$NODE"
@@ -116,6 +117,7 @@ install_metrics_server: $INSTALL_METRICS_SERVER
 install_helm: $INSTALL_HELM
 helm_version: $HELM_VERSION
 install_flux: $INSTALL_FLUX
+flux_version: $FLUX_VERSION
 EOF
 
 echo "Generated Ansible vars file: ${VARS_OUTPUT_PATH}"

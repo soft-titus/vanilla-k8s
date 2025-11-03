@@ -130,11 +130,7 @@
 
       - name: Install Helm (latest)
         shell: |
-          if helm version &>/dev/null; then
-            curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-          else
-            curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-          fi
+          curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
         when: helm_version == "latest"
 
       - name: Install Helm (specific version)

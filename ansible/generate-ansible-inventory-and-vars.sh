@@ -5,7 +5,7 @@
 set -euo pipefail
 
 source "$(dirname "$0")/../cluster.env"
-export SSH_PRIVATE_KEY_PATH NODES K8S_POD_CIDR
+export SSH_PRIVATE_KEY_PATH NODES K8S_POD_CIDR K8S_SERVICE_CIDR
 
 INVENTORY_OUTPUT_PATH="$(dirname "$0")/hosts.ini"
 VARS_OUTPUT_PATH="$(dirname "$0")/vars.yaml"
@@ -75,6 +75,7 @@ CONTROL_PLANE_NODES=()
 HAPROXY_VERSION="${HAPROXY_VERSION}"
 CONTAINERD_VERSION="${CONTAINERD_VERSION}"
 POD_CIDR="${K8S_POD_CIDR}"
+SERVICE_CIDR="${K8S_SERVICE_CIDR}"
 KUBE_VERSION="${KUBE_VERSION}"
 CNI_PLUGIN="${CNI_PLUGIN}"
 CALICO_VERSION="${CALICO_VERSION}"
@@ -114,6 +115,7 @@ cilium_version: "$CILIUM_VERSION"
 flannel_version: "$FLANNEL_VERSION"
 
 pod_cidr: "$POD_CIDR"
+service_cidr: "$SERVICE_CIDR"
 load_balancer_ip: "$LOAD_BALANCER_IP"
 kube_apiserver_port: 6443
 

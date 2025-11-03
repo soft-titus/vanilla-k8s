@@ -14,7 +14,8 @@
         kubeadm init \
           --control-plane-endpoint {{ kubeadm_control_plane_endpoint }} \
           --upload-certs \
-          --pod-network-cidr {{ pod_cidr }}
+          --pod-network-cidr {{ pod_cidr }} \
+          --service-cidr {{ service_cidr }}
       args:
         creates: /etc/kubernetes/admin.conf
 

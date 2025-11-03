@@ -11,6 +11,13 @@
         dest: /tmp/kube-flannel-{{ flannel_version }}.yml
       when: flannel_version != "latest"
 
+    - name: Update Flannel manifest Pod CIDR if not default
+      replace:
+        path: "/tmp/kube-flannel-{{ flannel_version }}.yml"
+        regexp: '10\.244\.0\.0/16'
+        replace: "{{ pod_cidr }}"
+      when: pod_cidr != "10.244.0.0/16"
+
     - name: Apply Flannel manifest
       command: kubectl apply -f /tmp/kube-flannel-{{ flannel_version }}.yml
       environment:

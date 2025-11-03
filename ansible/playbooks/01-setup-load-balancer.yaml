@@ -13,7 +13,7 @@
         update_cache: yes
       when: haproxy_version == "latest"
         
-    - name: "Install HAProxy ({{ haproxy_version }})"
+    - name: Install HAProxy (specific version)
       apt:
         name: "haproxy={{ haproxy_version }}"
         allow_downgrade: yes

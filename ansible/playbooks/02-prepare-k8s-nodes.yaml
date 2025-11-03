@@ -64,7 +64,7 @@
         state: latest
       when: containerd_version == "latest"
 
-    - name: "Install containerd ({{ containerd_version }})"
+    - name: Install containerd (specific version)
       apt:
         name: "containerd={{ containerd_version }}"
         allow_downgrade: yes

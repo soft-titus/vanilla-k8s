@@ -128,11 +128,22 @@
 
     - block:
 
-      - name: Install Helm
+      - name: Install Helm (latest)
         shell: |
-          curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-        args:
-          creates: /usr/local/bin/helm
+          if helm version &>/dev/null; then
+            curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          else
+            curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          fi
+        when: helm_version == "latest"
+
+      - name: Install Helm (specific version)
+        shell: |
+          INSTALLED_VERSION=$(helm version --short 2>/dev/null | sed 's/v//; s/+.*//')
+          if [ "$INSTALLED_VERSION" != "{{ helm_version }}" ]; then
+            curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash -s -- --version v"{{ helm_version }}"
+          fi
+        when: helm_version != "latest"
 
       when: install_helm | bool
 

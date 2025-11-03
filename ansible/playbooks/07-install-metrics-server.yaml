@@ -10,14 +10,23 @@
   
     - block:
 
-      - name: Download Metrics Server manifest
+      - name: Download Metrics Server manifest (latest)
         get_url:
           url: "https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
-          dest: /tmp/metrics-server.yaml
+          dest: /tmp/metrics-server-latest.yaml
           mode: '0644'
+          force: yes
+        when: metrics_server_version == "latest"
+
+      - name: Download Metrics Server manifest (specific version)
+        get_url:
+          url: "https://github.com/kubernetes-sigs/metrics-server/releases/download/v{{ metrics_server_version }}/components.yaml"
+          dest: /tmp/metrics-server-{{ metrics_server_version }}.yaml
+          mode: '0644'
+        when: metrics_server_version != "latest"
 
       - name: Apply Metrics Server manifest
-        command: kubectl apply -f /tmp/metrics-server.yaml --kubeconfig {{ kubeconfig_path }}
+        command: kubectl apply -f /tmp/metrics-server-{{ metrics_server_version }}.yaml --kubeconfig {{ kubeconfig_path }}
         register: apply_result
         changed_when: "'configured' not in apply_result.stdout"
 

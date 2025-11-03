@@ -1,22 +1,37 @@
-    - name: Check if Cilium is already installed
-      command: kubectl get daemonset cilium -n kube-system
-      register: cilium_ds
-      ignore_errors: yes
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
+    - name: Get latest stable Cilium CLI version
+      shell: curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt | sed 's/^v//' | tr -d '[:space:]'
+      register: cilium_stable
+      changed_when: false
+      when: cilium_cli_version == "latest"
 
-    - name: Download Cilium CLI
+    - name: Set target Cilium CLI version
+      set_fact:
+        cilium_target_cli_version: "{{ cilium_stable.stdout | trim if cilium_cli_version == 'latest' else cilium_cli_version | trim }}"
+
+    - name: Check if Cilium CLI is installed
+      command: cilium version --client
+      register: cilium_installed
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Parse installed Cilium CLI version
+      set_fact:
+        cilium_installed_cli_version: >-
+          {{ (cilium_installed.stdout | regex_search('cilium-cli:\s*v([0-9]+\.[0-9]+\.[0-9]+)', '\1')) | default('none', true) }}
+
+    - name: Download Cilium CLI if version mismatch
       get_url:
-        url: https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz
-        dest: /tmp/cilium.tar.gz
-      when: cilium_ds.rc != 0
+        url: "https://github.com/cilium/cilium-cli/releases/download/v{{ cilium_target_cli_version }}/cilium-linux-amd64.tar.gz"
+        dest: /tmp/cilium-{{ cilium_target_cli_version }}.tar.gz
+        mode: '0644'
+      when: cilium_installed_cli_version != cilium_target_cli_version
 
     - name: Extract Cilium CLI
       unarchive:
-        src: /tmp/cilium.tar.gz
+        src: /tmp/cilium-{{ cilium_target_cli_version }}.tar.gz
         dest: /tmp/
         remote_src: yes
-      when: cilium_ds.rc != 0
+      when: cilium_installed_cli_version != cilium_target_cli_version
 
     - name: Move Cilium binary to /usr/local/bin
       copy:
@@ -24,13 +39,40 @@
         dest: /usr/local/bin/cilium
         remote_src: yes
         mode: '0755'
-      when: cilium_ds.rc != 0
+      when: cilium_installed_cli_version != cilium_target_cli_version
 
-    - name: Install Cilium CNI using CLI
-      command: cilium install
+    - name: Get current installed Cilium version
+      command: cilium version
+      register: cilium_cluster_version
+      ignore_errors: yes
+      changed_when: false
       environment:
         KUBECONFIG: "{{ kubeconfig }}"
-      when: cilium_ds.rc != 0
+
+    - name: Set installed version fact
+      set_fact:
+        cilium_installed_version: >-
+          {{ (cilium_cluster_version.stdout | regex_search('cilium\s*image\s*\(running\):\s*([0-9]+\.[0-9]+\.[0-9]+)', '\1')) | default('none', true) }}
+
+    - name: Install Cilium CNI
+      command: >-
+        cilium install
+        {% if cilium_version != 'latest' %}--version {{ cilium_version }}{% endif %}
+        --set ipam.operator.clusterPoolIPv4PodCIDRList={{ pod_cidr }}
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      when: cilium_installed_version == 'none'
+
+    - name: Upgrade or downgrade Cilium CNI
+      command: >-
+        cilium upgrade
+        {% if cilium_version != 'latest' %}--version {{ cilium_version }}{% endif %}
+        --set ipam.operator.clusterPoolIPv4PodCIDRList={{ pod_cidr }}
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      when:
+        - cilium_installed_version != 'none'
+        - cilium_installed_version != cilium_version
 
     - name: Wait for Cilium pods to be ready
       command: kubectl -n kube-system rollout status daemonset/cilium
@@ -40,7 +82,6 @@
       delay: 15
       register: cilium_rollout
       until: cilium_rollout.rc == 0
-      when: cilium_ds.rc != 0
 
     - name: Get Cilium status
       command: cilium status --verbose

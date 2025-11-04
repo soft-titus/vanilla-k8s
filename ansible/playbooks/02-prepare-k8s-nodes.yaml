@@ -126,22 +126,18 @@
       shell: apt-mark hold kubelet kubeadm kubectl
       changed_when: false
 
-    - block:
+    - name: Install Helm (latest)
+      shell: |
+        curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      when: helm_version == "latest"
 
-      - name: Install Helm (latest)
-        shell: |
-          curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-        when: helm_version == "latest"
-
-      - name: Install Helm (specific version)
-        shell: |
-          INSTALLED_VERSION=$(helm version --short 2>/dev/null | sed 's/v//; s/+.*//')
-          if [ "$INSTALLED_VERSION" != "{{ helm_version }}" ]; then
-            curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash -s -- --version v"{{ helm_version }}"
-          fi
-        when: helm_version != "latest"
-
-      when: install_helm | bool
+    - name: Install Helm (specific version)
+      shell: |
+        INSTALLED_VERSION=$(helm version --short 2>/dev/null | sed 's/v//; s/+.*//')
+        if [ "$INSTALLED_VERSION" != "{{ helm_version }}" ]; then
+          curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash -s -- --version v"{{ helm_version }}"
+        fi
+      when: helm_version != "latest"
 
     - block:
 

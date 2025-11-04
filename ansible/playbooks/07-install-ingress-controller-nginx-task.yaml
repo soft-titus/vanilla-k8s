@@ -1,0 +1,88 @@
+    - name: Install ingress-nginx
+      shell: |
+        kubectl apply -f "https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v{{ ingress_nginx_version }}/deploy/static/provider/baremetal/deploy.yaml"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Wait for ingress-nginx pods to be ready
+      command: kubectl -n ingress-nginx rollout status deployment/ingress-nginx-controller
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      retries: 20
+      delay: 15
+      register: ingress_nginx_rollout
+      until: ingress_nginx_rollout.rc == 0
+
+    - name: Scale ingress-nginx deployment
+      shell: |
+        kubectl scale deployment ingress-nginx-controller \
+          -n ingress-nginx \
+          --replicas={{ ingress_controller_replicas }}
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Get Ingress Nginx status
+      shell: kubectl get pods -n ingress-nginx -l app.kubernetes.io/instance=ingress-nginx
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: ingress_nginx_status
+
+    - name: Show Ingress-Nginx status
+      debug:
+        var: ingress_nginx_status.stdout
+
+    - name: Get ingress-nginx NodePorts
+      shell: |
+        kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.spec.ports[?(@.name=="http")].nodePort} {.spec.ports[?(@.name=="https")].nodePort}'
+      register: ingress_ports
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Parse ingress NodePort values
+      set_fact:
+        ingress_http_port: "{{ ingress_ports.stdout.split()[0] }}"
+        ingress_https_port: "{{ ingress_ports.stdout.split()[1] }}"
+
+    - name: Update HAProxy configuration for ingress
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['k8s_lb'] }}"
+      become: true
+      blockinfile:
+        path: /etc/haproxy/haproxy.cfg
+        marker: "# {mark} ANSIBLE MANAGED INGRESS"
+        block: |
+          frontend http_front
+              bind *:80
+              default_backend ingress_http_backend
+
+          frontend https_front
+              bind *:443
+              default_backend ingress_https_backend
+
+          backend ingress_http_backend
+              balance roundrobin
+              option forwardfor
+          {% for node in control_plane_nodes %}
+              server {{ node.name }} {{ node.ip }}:{{ ingress_http_port }} check fall 3 rise 2
+          {% endfor %}
+
+          backend ingress_https_backend
+              balance roundrobin
+              option forwardfor
+          {% for node in control_plane_nodes %}
+              server {{ node.name }} {{ node.ip }}:{{ ingress_https_port }} check fall 3 rise 2
+          {% endfor %}
+
+    - name: Validate HAProxy configuration
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['k8s_lb'] }}"
+      become: true
+      command: haproxy -c -f /etc/haproxy/haproxy.cfg
+
+    - name: Restart HAProxy service
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['k8s_lb'] }}"
+      become: true
+      systemd:
+        name: haproxy
+        state: restarted

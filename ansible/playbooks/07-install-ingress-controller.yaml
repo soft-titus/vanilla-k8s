@@ -1,0 +1,14 @@
+- name: Install selected Ingress Controller
+  hosts: k8s_masters[0]
+  become: true
+  vars_files:
+    - ../vars.yaml
+
+  vars:
+    kubeconfig: /etc/kubernetes/admin.conf
+
+  tasks:
+
+    - name: "Install Ingress Controller ({{ install_ingress_controller }})"
+      include_tasks: "07-install-ingress-controller-{{ install_ingress_controller }}-task.yaml"
+      when: install_ingress_controller != "none"

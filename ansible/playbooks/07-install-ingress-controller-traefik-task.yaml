@@ -1,0 +1,124 @@
+    - name: Add Traefik Helm repo
+      shell: |
+        helm repo add traefik https://traefik.github.io/charts
+        helm repo update
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Determine Traefik chart version
+      shell: |
+        if [ "{{ traefik_helm_chart_version }}" = "latest" ]; then
+          helm search repo traefik/traefik --versions --devel | awk 'NR==2{print $2}'
+        else
+          echo "{{ traefik_helm_chart_version }}"
+        fi
+      register: traefik_chart_version
+      changed_when: false
+
+    - name: Set Traefik chart version fact
+      set_fact:
+        resolved_traefik_chart_version: "{{ traefik_chart_version.stdout | trim }}"
+
+    - name: Install or upgrade Traefik Ingress Controller ({{ resolved_traefik_chart_version }})
+      shell: |
+        helm upgrade --install traefik traefik/traefik \
+          --namespace traefik \
+          --create-namespace \
+          --version {{ resolved_traefik_chart_version }} \
+          --set service.type=NodePort \
+          --set service.spec.externalTrafficPolicy=Local \
+          --set ports.web.nodePort=32080 \
+          --set ports.websecure.nodePort=32443 \
+          --set deployment.replicas={{ ingress_controller_replicas }}
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Wait for Traefik deployment to be ready
+      command: kubectl -n traefik rollout status deployment/traefik
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      retries: 20
+      delay: 15
+      register: traefik_rollout
+      until: traefik_rollout.rc == 0
+
+    - name: Get Traefik pod status
+      shell: kubectl get pods -n traefik -l app.kubernetes.io/name=traefik
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: traefik_pod_status
+
+    - name: Show Traefik status
+      debug:
+        var: traefik_pod_status.stdout
+
+    - name: Get Traefik NodePorts
+      shell: |
+        kubectl get svc traefik -n traefik -o jsonpath='{.spec.ports[?(@.name=="web")].nodePort} {.spec.ports[?(@.name=="websecure")].nodePort}'
+      register: traefik_ports
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Parse Traefik NodePort values
+      set_fact:
+        traefik_http_port: "{{ traefik_ports.stdout.split()[0] }}"
+        traefik_https_port: "{{ traefik_ports.stdout.split()[1] }}"
+
+    - name: Backup HAProxy configuration
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['k8s_lb'] }}"
+      become: true
+      copy:
+        src: /etc/haproxy/haproxy.cfg
+        dest: /etc/haproxy/haproxy.cfg.bak
+        remote_src: true
+
+    - name: Update HAProxy configuration for Traefik
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['k8s_lb'] }}"
+      become: true
+      blockinfile:
+        path: /etc/haproxy/haproxy.cfg
+        marker: "# {mark} ANSIBLE MANAGED TRAEFIK"
+        block: |
+          frontend http_front
+              bind *:80
+              default_backend traefik_http_backend
+
+          frontend https_front
+              bind *:443
+              default_backend traefik_https_backend
+
+          backend traefik_http_backend
+              balance roundrobin
+              option forwardfor
+          {% for node in control_plane_nodes %}
+              server {{ node.name }} {{ node.ip }}:{{ traefik_http_port }} check fall 3 rise 2
+          {% endfor %}
+          {% for node in worker_nodes %}
+              server {{ node.name }} {{ node.ip }}:{{ traefik_http_port }} check fall 3 rise 2
+          {% endfor %}
+
+          backend traefik_https_backend
+              balance roundrobin
+              option forwardfor
+          {% for node in control_plane_nodes %}
+              server {{ node.name }} {{ node.ip }}:{{ traefik_https_port }} check fall 3 rise 2
+          {% endfor %}
+          {% for node in worker_nodes %}
+              server {{ node.name }} {{ node.ip }}:{{ traefik_https_port }} check fall 3 rise 2
+          {% endfor %}
+
+    - name: Validate HAProxy configuration
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['k8s_lb'] }}"
+      become: true
+      command: haproxy -c -f /etc/haproxy/haproxy.cfg
+
+    - name: Restart HAProxy service
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['k8s_lb'] }}"
+      become: true
+      systemd:
+        name: haproxy
+        state: restarted

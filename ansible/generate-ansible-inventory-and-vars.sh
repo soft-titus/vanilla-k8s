@@ -72,6 +72,7 @@ echo "Generating Ansible vars file..."
 
 LOAD_BALANCER_IP=""
 CONTROL_PLANE_NODES=()
+WORKER_NODES=()
 HAPROXY_VERSION="${HAPROXY_VERSION}"
 CONTAINERD_VERSION="${CONTAINERD_VERSION}"
 HELM_VERSION="${HELM_VERSION}"
@@ -88,6 +89,7 @@ METRICS_SERVER_VERSION="${METRICS_SERVER_VERSION}"
 INSTALL_INGRESS_CONTROLLER="${INSTALL_INGRESS_CONTROLLER}"
 INGRESS_CONTROLLER_REPLICAS="${INGRESS_CONTROLLER_REPLICAS}"
 INGRESS_NGINX_VERSION="${INGRESS_NGINX_VERSION}"
+TRAEFIK_HELM_CHART_VERSION="${TRAEFIK_HELM_CHART_VERSION}"
 INSTALL_FLUX="${INSTALL_FLUX}"
 FLUX_VERSION="${FLUX_VERSION}"
 
@@ -100,6 +102,9 @@ for NODE in "${NODES[@]}"; do
       ;;
     k8s-master-*)
       CONTROL_PLANE_NODES+=("- { name: \"$NAME\", ip: \"$IP\" }")
+      ;;
+    k8s-worker-*)
+      WORKER_NODES+=("- { name: \"$NAME\", ip: \"$IP\" }")
       ;;
   esac
 done
@@ -124,6 +129,9 @@ kube_apiserver_port: 6443
 control_plane_nodes:
 $(printf '  %s\n' "${CONTROL_PLANE_NODES[@]}")
 
+worker_nodes:
+$(printf '  %s\n' "${WORKER_NODES[@]}")
+
 haproxy_version: "$HAPROXY_VERSION"
 containerd_version: "$CONTAINERD_VERSION"
 helm_version: "$HELM_VERSION"
@@ -134,6 +142,7 @@ metrics_server_version: "$METRICS_SERVER_VERSION"
 install_ingress_controller: "$INSTALL_INGRESS_CONTROLLER"
 ingress_controller_replicas: $INGRESS_CONTROLLER_REPLICAS
 ingress_nginx_version: "$INGRESS_NGINX_VERSION"
+traefik_helm_chart_version: "$TRAEFIK_HELM_CHART_VERSION"
 
 install_flux: $INSTALL_FLUX
 flux_version: "$FLUX_VERSION"

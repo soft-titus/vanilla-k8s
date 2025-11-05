@@ -6,3 +6,4 @@
 - import_playbook: 06-add-worker-nodes.yaml
 - import_playbook: 07-install-ingress-controller.yaml
 - import_playbook: 07-install-metrics-server.yaml
+- import_playbook: 08-install-vpa.yaml

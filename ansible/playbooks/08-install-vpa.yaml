@@ -1,0 +1,77 @@
+- name: Install Vertical Pod Autoscaler (VPA)
+  hosts: k8s_masters[0]
+  become: true
+  vars_files:
+    - ../vars.yaml
+
+  vars:
+    kubeconfig: /etc/kubernetes/admin.conf
+
+  tasks:
+
+    - block:
+
+        - name: Ensure Metrics Server is installed before VPA
+          assert:
+            that:
+              - install_metrics_server | bool
+            fail_msg: "Metrics Server must be installed before deploying VPA"
+
+        - name: Clone Kubernetes Autoscaler repository
+          git:
+            repo: "https://github.com/kubernetes/autoscaler.git"
+            dest: /tmp/autoscaler
+            version: master
+            force: true
+
+        - name: Run VPA installation script
+          shell: |
+            cd /tmp/autoscaler/vertical-pod-autoscaler
+            unset REGISTRY TAG
+            {% if vpa_version != 'latest' %}
+            export TAG="{{ vpa_version }}"
+            {% endif %}
+            ./hack/vpa-up.sh
+          args:
+            chdir: /tmp/autoscaler/vertical-pod-autoscaler
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+
+        - name: Wait for VPA recommender deployment
+          command: kubectl -n kube-system rollout status deployment/vpa-recommender
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+          retries: 20
+          delay: 15
+          register: vpa_recommender_rollout
+          until: vpa_recommender_rollout.rc == 0
+
+        - name: Wait for VPA updater deployment
+          command: kubectl -n kube-system rollout status deployment/vpa-updater
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+          retries: 20
+          delay: 15
+          register: vpa_updater_rollout
+          until: vpa_updater_rollout.rc == 0
+
+        - name: Wait for VPA admission-controller deployment
+          command: kubectl -n kube-system rollout status deployment/vpa-admission-controller
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+          retries: 20
+          delay: 15
+          register: vpa_admission_rollout
+          until: vpa_admission_rollout.rc == 0
+
+        - name: Get VPA pods status
+          shell: kubectl get pods -n kube-system -l app.kubernetes.io/name=vertical-pod-autoscaler
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+          register: vpa_pods_status
+
+        - name: Show VPA pods status
+          debug:
+            var: vpa_pods_status.stdout
+
+      when: install_vpa | bool

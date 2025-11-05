@@ -1,0 +1,177 @@
+- name: Prepare Longhorn Requirements
+  hosts: k8s_masters,k8s_workers
+  become: true
+  vars_files:
+    - ../vars.yaml
+
+  tasks:
+
+    - block:
+
+        - name: Ensure required packages are installed
+          apt:
+            name:
+              - nfs-common
+              - open-iscsi
+              - cryptsetup
+              - dmsetup
+            state: present
+            update_cache: yes
+
+        - name: Load required kernel modules
+          modprobe:
+            name: "{{ item }}"
+            state: present
+          loop:
+            - nfs
+            - dm_crypt
+
+        - name: Persist kernel modules across reboots
+          copy:
+            dest: /etc/modules-load.d/longhorn.conf
+            content: |
+              nfs
+              dm_crypt
+            owner: root
+            group: root
+            mode: '0644'
+
+        - name: Ensure open-iscsi service is running
+          ansible.builtin.systemd:
+            name: iscsid
+            state: started
+
+        - name: Create /etc/multipath.conf if it does not exist
+          ansible.builtin.file:
+            path: /etc/multipath.conf
+            state: touch
+            owner: root
+            group: root
+            mode: '0644'
+
+        - name: Ensure devnode blacklist is present in /etc/multipath.conf
+          ansible.builtin.blockinfile:
+            path: /etc/multipath.conf
+            block: |
+              blacklist {
+                  devnode "^sd[a-z0-9]+"
+              }
+            insertafter: EOF
+            create: yes
+            owner: root
+            group: root
+            mode: '0644'
+
+        - name: Restart multipathd service
+          ansible.builtin.systemd:
+            name: multipathd
+            state: restarted
+
+      when: install_longhorn | bool
+
+- name: Install Longhorn
+  hosts: k8s_masters[0]
+  become: true
+
+  vars_files:
+    - ../vars.yaml
+
+  vars:
+    kubeconfig: /etc/kubernetes/admin.conf
+
+  tasks:
+    - block:
+
+        - name: Add Longhorn Helm repo
+          shell: |
+            helm repo add longhorn https://charts.longhorn.io
+            helm repo update
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+
+        - name: Determine Longhorn chart version
+          shell: |
+            if [ "{{ longhorn_helm_chart_version }}" = "latest" ]; then
+              helm search repo longhorn/longhorn --versions --devel | awk 'NR==2{print $2}'
+            else
+              echo "{{ longhorn_helm_chart_version }}"
+            fi
+          register: longhorn_chart_version
+          changed_when: false
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+
+        - name: Set Longhorn chart version fact
+          set_fact:
+            resolved_longhorn_chart_version: "{{ longhorn_chart_version.stdout | trim }}"
+
+        - name: Install or upgrade Longhorn ({{ resolved_longhorn_chart_version }})
+          shell: |
+            helm upgrade --install longhorn longhorn/longhorn \
+              --namespace longhorn-system \
+              --create-namespace \
+              --version {{ resolved_longhorn_chart_version }}
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+
+        - name: Wait for Longhorn Manager pods to be ready
+          command: kubectl -n longhorn-system rollout status daemonset/longhorn-manager
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+          retries: 30
+          delay: 20
+          register: longhorn_rollout
+          until: longhorn_rollout.rc == 0
+
+        - name: Get Longhorn pods status
+          shell: kubectl get pods -n longhorn-system
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+          register: longhorn_pods
+
+        - name: Show Longhorn pod status
+          debug:
+            var: longhorn_pods.stdout
+
+        - name: Unset all other default storage classes
+          shell: |
+            for sc in $(kubectl get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}'); do
+              if [ "$sc" != "default" ]; then
+                kubectl patch storageclass "$sc" -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+              fi
+            done
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+          changed_when: false
+
+        - name: Apply Longhorn default StorageClass
+          copy:
+            dest: /tmp/longhorn-default-storageclass.yaml
+            content: |
+              apiVersion: storage.k8s.io/v1
+              kind: StorageClass
+              metadata:
+                name: default
+                annotations:
+                  storageclass.kubernetes.io/is-default-class: "true"
+              provisioner: driver.longhorn.io
+              allowVolumeExpansion: true
+              parameters:
+                dataLocality: disabled
+                fromBackup: ""
+                fsType: ext4
+                numberOfReplicas: "{{ longhorn_volume_replicas }}"
+                staleReplicaTimeout: "30"
+                mkfsParams: "-i {{ longhorn_volume_inode_size }}"
+              reclaimPolicy: Delete
+              volumeBindingMode: WaitForFirstConsumer
+            owner: root
+            group: root
+            mode: '0644'
+
+        - name: Apply the default Longhorn StorageClass
+          command: kubectl apply -f /tmp/longhorn-default-storageclass.yaml
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+
+      when: install_longhorn | bool

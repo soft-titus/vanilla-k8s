@@ -113,13 +113,3 @@ ansible-playbook -i ansible/hosts.ini ansible/playbooks/main.yaml
 * Stop nodes: `bash multipass/stop-vms.sh`
 * Restart nodes: `bash multipass/restart-vms.sh`
 * Delete nodes: `bash multipass/delete-vms.sh`
-
-## Notes
-
-* This setup does not include:
-
-  * Ingress controllers
-  * CSI drivers
-  * Metrics server
-
-* These components are intended to be installed and managed via GitOps using Flux, giving you full control over which add-ons to deploy.

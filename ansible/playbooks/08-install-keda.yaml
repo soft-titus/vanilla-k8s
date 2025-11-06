@@ -1,0 +1,72 @@
+- name: Install KEDA
+  hosts: k8s_masters[0]
+  become: true
+  vars_files:
+    - ../vars.yaml
+
+  vars:
+    kubeconfig: /etc/kubernetes/admin.conf
+
+  tasks:
+
+    - block:
+
+        - name: Warn if Metrics Server is not installed (optional dependency)
+          debug:
+            msg: >
+              Metrics Server is not enabled (INSTALL_METRICS_SERVER=false).
+              KEDA will still install successfully, but CPU/memory-based scaling triggers will not work.
+          when: not (install_metrics_server | bool)
+
+        - name: Add KEDA Helm repo
+          shell: |
+            helm repo add kedacore https://kedacore.github.io/charts
+            helm repo update
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+
+        - name: Determine KEDA chart version
+          shell: |
+            if [ "{{ keda_helm_chart_version }}" = "latest" ]; then
+              helm search repo kedacore/keda --versions --devel | awk 'NR==2{print $2}'
+            else
+              echo "{{ keda_helm_chart_version }}"
+            fi
+          register: keda_chart_version
+          changed_when: false
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+
+        - name: Set KEDA chart version fact
+          set_fact:
+            resolved_keda_chart_version: "{{ keda_chart_version.stdout | trim }}"
+
+        - name: Install or upgrade KEDA ({{ resolved_keda_chart_version }})
+          shell: |
+            helm upgrade --install keda kedacore/keda \
+              --namespace keda \
+              --create-namespace \
+              --version {{ resolved_keda_chart_version }}
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+
+        - name: Wait for KEDA operator deployment to be ready
+          command: kubectl -n keda rollout status deployment/keda-operator
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+          retries: 30
+          delay: 20
+          register: keda_rollout
+          until: keda_rollout.rc == 0
+
+        - name: Get KEDA pods status
+          shell: kubectl get pods -n keda
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+          register: keda_pods
+
+        - name: Show KEDA pod status
+          debug:
+            var: keda_pods.stdout
+
+      when: install_keda | bool

@@ -1,6 +1,9 @@
 - name: Add additional master nodes
   hosts: k8s_masters[1:] # skip the first master
   become: yes
+  vars_files:
+    - ../vars.yaml
+
   vars:
     kubeconfig: /etc/kubernetes/admin.conf
     kube_home: /home/ubuntu
@@ -60,6 +63,17 @@
         group: ubuntu
         mode: '0600'
         remote_src: yes
+        
+    - name: Remove control-plane taint from current master to allow scheduling
+      shell: >
+        if kubectl get node {{ inventory_hostname }} -o jsonpath='{.spec.taints[?(@.key=="node-role.kubernetes.io/control-plane")].effect}' | grep -q "NoSchedule"; then
+          kubectl taint node {{ inventory_hostname }} node-role.kubernetes.io/control-plane:NoSchedule-
+        fi
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      when: allow_scheduling_on_master_nodes | bool
+      register: taint_result
+      changed_when: "'taint' in taint_result.stdout or 'taint' in taint_result.stderr"
 
     - name: Rollout restart CoreDNS to ensure it runs on different master nodes
       shell: kubectl -n kube-system rollout restart deployment coredns

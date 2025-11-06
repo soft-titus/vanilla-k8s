@@ -35,3 +35,14 @@
         group: ubuntu
         mode: '0600'
         remote_src: yes
+
+    - name: Remove control-plane taint from current master to allow scheduling
+      shell: >
+        if kubectl get node {{ inventory_hostname }} -o jsonpath='{.spec.taints[?(@.key=="node-role.kubernetes.io/control-plane")].effect}' | grep -q "NoSchedule"; then
+          kubectl taint node {{ inventory_hostname }} node-role.kubernetes.io/control-plane:NoSchedule-
+        fi
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      when: allow_scheduling_on_master_nodes | bool
+      register: taint_result
+      changed_when: "'taint' in taint_result.stdout or 'taint' in taint_result.stderr"

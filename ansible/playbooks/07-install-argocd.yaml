@@ -1,0 +1,64 @@
+- name: Install Argo CD on Kubernetes
+  hosts: k8s_masters[0]
+  become: yes
+  vars_files:
+    - ../vars.yaml
+
+  vars:
+    kubeconfig: /etc/kubernetes/admin.conf
+
+  tasks:
+
+    - block:
+
+      - name: Download Argo CD manifest (latest)
+        get_url:
+          url: "https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml"
+          dest: /tmp/argocd-latest.yaml
+          mode: '0644'
+          force: yes
+        when: argocd_version == "latest"
+
+      - name: Download Argo CD manifest (specific version)
+        get_url:
+          url: "https://raw.githubusercontent.com/argoproj/argo-cd/v{{ argocd_version }}/manifests/install.yaml"
+          dest: /tmp/argocd-{{ argocd_version }}.yaml
+          mode: '0644'
+        when: argocd_version != "latest"
+        
+      - name: Create namespace for Argo CD
+        shell: >
+          kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+        changed_when: false
+        environment:
+          KUBECONFIG: "{{ kubeconfig }}"
+
+      - name: Apply Argo CD manifest
+        command: >
+          kubectl apply -f /tmp/argocd-{{ argocd_version }}.yaml
+          -n argocd
+        register: apply_result
+        changed_when: "'configured' not in apply_result.stdout"
+        environment:
+          KUBECONFIG: "{{ kubeconfig }}"
+
+      - name: Wait for Argo CD server rollout
+        command: >
+          kubectl rollout status deployment/argocd-server
+          -n argocd
+          --timeout=300s
+        environment:
+          KUBECONFIG: "{{ kubeconfig }}"
+
+      - name: Get Argo CD pods
+        command: >
+          kubectl get pods -n argocd
+        register: argocd_pods
+        changed_when: false
+        environment:
+          KUBECONFIG: "{{ kubeconfig }}"
+
+      - debug:
+          msg: "{{ argocd_pods.stdout_lines }}"
+
+      when: install_argocd | bool

@@ -17,6 +17,7 @@ Ideal for learning, homelab, testing, or local development.
   - Ingress Controller
   - Longhorn CSI Driver
   - Metrics Server
+  - Kube Prometheus Stack
   - Vertical Pod Autoscaler (VPA)
   - KEDA
   - Argo CD

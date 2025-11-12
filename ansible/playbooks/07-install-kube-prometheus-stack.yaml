@@ -1,0 +1,69 @@
+- name: Install kube-prometheus-stack
+  hosts: k8s_masters[0]
+  become: true
+  vars_files:
+    - ../vars.yaml
+
+  vars:
+    kubeconfig: /etc/kubernetes/admin.conf
+
+  tasks:
+
+    - block:
+
+        - name: Add Prometheus Community Helm repo
+          shell: |
+            helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+            helm repo update
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+
+        - name: Determine kube-prometheus-stack chart version
+          shell: |
+            if [ "{{ kube_prometheus_stack_helm_chart_version }}" = "latest" ]; then
+              helm search repo prometheus-community/kube-prometheus-stack --versions --devel | awk 'NR==2{print $2}'
+            else
+              echo "{{ kube_prometheus_stack_helm_chart_version }}"
+            fi
+          register: prometheus_chart_version
+          changed_when: false
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+
+        - name: Set kube-prometheus-stack chart version fact
+          set_fact:
+            resolved_prometheus_chart_version: "{{ prometheus_chart_version.stdout | trim }}"
+
+        - name: Install or upgrade kube-prometheus-stack ({{ resolved_prometheus_chart_version }})
+          shell: |
+            helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+              --namespace monitoring \
+              --create-namespace \
+              --version {{ resolved_prometheus_chart_version }} \
+              --set prometheus-node-exporter.enabled={{ enable_node_exporter | lower }} \
+              --set kube-state-metrics.enabled={{ enable_kube_state_metrics | lower }} \
+              --set alertmanager.enabled={{ enable_alertmanager | lower }} \
+              --set grafana.enabled={{ enable_grafana | lower }}
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+
+        - name: Wait for Prometheus operator deployment to be ready
+          command: kubectl -n monitoring rollout status deployment/kube-prometheus-stack-operator
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+          retries: 30
+          delay: 20
+          register: prometheus_rollout
+          until: prometheus_rollout.rc == 0
+
+        - name: Get monitoring pods status
+          shell: kubectl get pods -n monitoring -o wide
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+          register: monitoring_pods
+
+        - name: Show monitoring pod status
+          debug:
+            var: monitoring_pods.stdout
+
+      when: install_kube_prometheus_stack | bool

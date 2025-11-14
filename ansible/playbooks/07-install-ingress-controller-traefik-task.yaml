@@ -52,73 +52,77 @@
       debug:
         var: traefik_pod_status.stdout
 
-    - name: Get Traefik NodePorts
-      shell: |
-        kubectl get svc traefik -n traefik -o jsonpath='{.spec.ports[?(@.name=="web")].nodePort} {.spec.ports[?(@.name=="websecure")].nodePort}'
-      register: traefik_ports
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
+    - block:
 
-    - name: Parse Traefik NodePort values
-      set_fact:
-        traefik_http_port: "{{ traefik_ports.stdout.split()[0] }}"
-        traefik_https_port: "{{ traefik_ports.stdout.split()[1] }}"
+        - name: Get Traefik NodePorts
+          shell: |
+            kubectl get svc traefik -n traefik -o jsonpath='{.spec.ports[?(@.name=="web")].nodePort} {.spec.ports[?(@.name=="websecure")].nodePort}'
+          register: traefik_ports
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
 
-    - name: Backup HAProxy configuration
-      delegate_to: "{{ item }}"
-      loop: "{{ groups['k8s_lb'] }}"
-      become: true
-      copy:
-        src: /etc/haproxy/haproxy.cfg
-        dest: /etc/haproxy/haproxy.cfg.bak
-        remote_src: true
+        - name: Parse Traefik NodePort values
+          set_fact:
+            traefik_http_port: "{{ traefik_ports.stdout.split()[0] }}"
+            traefik_https_port: "{{ traefik_ports.stdout.split()[1] }}"
 
-    - name: Update HAProxy configuration for Traefik
-      delegate_to: "{{ item }}"
-      loop: "{{ groups['k8s_lb'] }}"
-      become: true
-      blockinfile:
-        path: /etc/haproxy/haproxy.cfg
-        marker: "# {mark} ANSIBLE MANAGED TRAEFIK"
-        block: |
-          frontend http_front
-              bind *:80
-              default_backend traefik_http_backend
+        - name: Backup HAProxy configuration
+          delegate_to: "{{ item }}"
+          loop: "{{ groups['k8s_lb'] }}"
+          become: true
+          copy:
+            src: /etc/haproxy/haproxy.cfg
+            dest: /etc/haproxy/haproxy.cfg.bak
+            remote_src: true
 
-          frontend https_front
-              bind *:443
-              default_backend traefik_https_backend
+        - name: Update HAProxy configuration for Traefik
+          delegate_to: "{{ item }}"
+          loop: "{{ groups['k8s_lb'] }}"
+          become: true
+          blockinfile:
+            path: /etc/haproxy/haproxy.cfg
+            marker: "# {mark} ANSIBLE MANAGED TRAEFIK"
+            block: |
+              frontend http_front
+                  bind *:80
+                  default_backend traefik_http_backend
 
-          backend traefik_http_backend
-              balance roundrobin
-              option forwardfor
-          {% for node in control_plane_nodes %}
-              server {{ node.name }} {{ node.ip }}:{{ traefik_http_port }} check fall 3 rise 2
-          {% endfor %}
-          {% for node in worker_nodes %}
-              server {{ node.name }} {{ node.ip }}:{{ traefik_http_port }} check fall 3 rise 2
-          {% endfor %}
+              frontend https_front
+                  bind *:443
+                  default_backend traefik_https_backend
 
-          backend traefik_https_backend
-              balance roundrobin
-              option forwardfor
-          {% for node in control_plane_nodes %}
-              server {{ node.name }} {{ node.ip }}:{{ traefik_https_port }} check fall 3 rise 2
-          {% endfor %}
-          {% for node in worker_nodes %}
-              server {{ node.name }} {{ node.ip }}:{{ traefik_https_port }} check fall 3 rise 2
-          {% endfor %}
+              backend traefik_http_backend
+                  balance roundrobin
+                  option forwardfor
+              {% for node in control_plane_nodes %}
+                  server {{ node.name }} {{ node.ip }}:{{ traefik_http_port }} check fall 3 rise 2
+              {% endfor %}
+              {% for node in worker_nodes %}
+                  server {{ node.name }} {{ node.ip }}:{{ traefik_http_port }} check fall 3 rise 2
+              {% endfor %}
 
-    - name: Validate HAProxy configuration
-      delegate_to: "{{ item }}"
-      loop: "{{ groups['k8s_lb'] }}"
-      become: true
-      command: haproxy -c -f /etc/haproxy/haproxy.cfg
+              backend traefik_https_backend
+                  balance roundrobin
+                  option forwardfor
+              {% for node in control_plane_nodes %}
+                  server {{ node.name }} {{ node.ip }}:{{ traefik_https_port }} check fall 3 rise 2
+              {% endfor %}
+              {% for node in worker_nodes %}
+                  server {{ node.name }} {{ node.ip }}:{{ traefik_https_port }} check fall 3 rise 2
+              {% endfor %}
 
-    - name: Restart HAProxy service
-      delegate_to: "{{ item }}"
-      loop: "{{ groups['k8s_lb'] }}"
-      become: true
-      systemd:
-        name: haproxy
-        state: restarted
+        - name: Validate HAProxy configuration
+          delegate_to: "{{ item }}"
+          loop: "{{ groups['k8s_lb'] }}"
+          become: true
+          command: haproxy -c -f /etc/haproxy/haproxy.cfg
+
+        - name: Restart HAProxy service
+          delegate_to: "{{ item }}"
+          loop: "{{ groups['k8s_lb'] }}"
+          become: true
+          systemd:
+            name: haproxy
+            state: restarted
+
+      when: not install_metallb | bool

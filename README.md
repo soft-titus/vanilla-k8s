@@ -13,7 +13,7 @@ Ideal for learning, homelab, testing, or local development.
 - Supports Calico, Flannel, or Cilium CNI plugins
 - Automated node provisioning with Multipass and cloud-init
 - Scripts to start, stop, restart, and delete nodes
-- Optional installation of:
+- Optional installation of Kubernetes components:
   - MetalLB
   - Ingress Controller (nginx or traefik)
   - Longhorn CSI Driver
@@ -21,8 +21,10 @@ Ideal for learning, homelab, testing, or local development.
   - Kube Prometheus Stack
   - Vertical Pod Autoscaler (VPA)
   - KEDA
-  - Argo CD
+  - Argo CD Server
+- Optional installation of tools:
   - Flux CLI
+  - Argo CD CLI
 
 ---
 

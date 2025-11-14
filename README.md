@@ -14,7 +14,8 @@ Ideal for learning, homelab, testing, or local development.
 - Automated node provisioning with Multipass and cloud-init
 - Scripts to start, stop, restart, and delete nodes
 - Optional installation of:
-  - Ingress Controller
+  - MetalLB
+  - Ingress Controller (nginx or traefik)
   - Longhorn CSI Driver
   - Metrics Server
   - Kube Prometheus Stack

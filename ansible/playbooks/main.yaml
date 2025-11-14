@@ -11,4 +11,4 @@
 - import_playbook: 07-install-kube-prometheus-stack.yaml
 - import_playbook: 07-install-vpa.yaml
 - import_playbook: 07-install-keda.yaml
-- import_playbook: 07-install-argocd.yaml
+- import_playbook: 07-install-argocd-server.yaml

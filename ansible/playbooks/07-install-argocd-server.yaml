@@ -1,4 +1,4 @@
-- name: Install Argo CD on Kubernetes
+- name: Install Argo CD Server on Kubernetes
   hosts: k8s_masters[0]
   become: yes
   vars_files:
@@ -17,14 +17,14 @@
           dest: /tmp/argocd-latest.yaml
           mode: '0644'
           force: yes
-        when: argocd_version == "latest"
+        when: argocd_server_version == "latest"
 
       - name: Download Argo CD manifest (specific version)
         get_url:
-          url: "https://raw.githubusercontent.com/argoproj/argo-cd/v{{ argocd_version }}/manifests/install.yaml"
-          dest: /tmp/argocd-{{ argocd_version }}.yaml
+          url: "https://raw.githubusercontent.com/argoproj/argo-cd/v{{ argocd_server_version }}/manifests/install.yaml"
+          dest: /tmp/argocd-{{ argocd_server_version }}.yaml
           mode: '0644'
-        when: argocd_version != "latest"
+        when: argocd_server_version != "latest"
         
       - name: Create namespace for Argo CD
         shell: >
@@ -35,7 +35,7 @@
 
       - name: Apply Argo CD manifest
         command: >
-          kubectl apply -f /tmp/argocd-{{ argocd_version }}.yaml
+          kubectl apply -f /tmp/argocd-{{ argocd_server_version }}.yaml
           -n argocd
         register: apply_result
         changed_when: "'configured' not in apply_result.stdout"
@@ -61,4 +61,4 @@
       - debug:
           msg: "{{ argocd_pods.stdout_lines }}"
 
-      when: install_argocd | bool
+      when: install_argocd_server | bool

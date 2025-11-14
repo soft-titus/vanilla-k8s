@@ -155,3 +155,28 @@
         when: flux_version != "latest"
 
       when: install_flux | bool
+
+    - block:
+
+        - name: Install ArgoCD CLI (latest)
+          shell: |
+            LATEST_VERSION=$(curl -s https://api.github.com/repos/argoproj/argo-cd/releases/latest | grep tag_name | cut -d '"' -f 4)
+            INSTALLED_VERSION=$(argocd version --client --short 2>/dev/null | awk '{print $2}' | sed 's/^v//' | cut -d '+' -f 1)
+            if [ "$INSTALLED_VERSION" != "${LATEST_VERSION#v}" ]; then
+              curl -sSL -o /usr/local/bin/argocd \
+                https://github.com/argoproj/argo-cd/releases/download/${LATEST_VERSION}/argocd-linux-amd64
+              chmod +x /usr/local/bin/argocd
+            fi
+          when: argocd_cli_version == "latest"
+
+        - name: Install ArgoCD CLI (specific version)
+          shell: |
+            INSTALLED_VERSION=$(argocd version --client --short 2>/dev/null | awk '{print $3}' | sed 's/v//')
+            if [ "$INSTALLED_VERSION" != "{{ argocd_cli_version }}" ]; then
+              curl -sSL -o /usr/local/bin/argocd \
+                https://github.com/argoproj/argo-cd/releases/download/v{{ argocd_cli_version }}/argocd-linux-amd64
+              chmod +x /usr/local/bin/argocd
+            fi
+          when: argocd_cli_version != "latest"
+
+      when: install_argocd_cli | bool

@@ -1,0 +1,14 @@
+- name: Install selected Gateway API Controller
+  hosts: k8s_masters[0]
+  become: true
+  vars_files:
+    - ../vars.yaml
+
+  vars:
+    kubeconfig: /etc/kubernetes/admin.conf
+
+  tasks:
+
+    - name: "Install Gateway API Controller ({{ install_gateway_api_controller }})"
+      include_tasks: "07-install-gateway-api-controller-{{ install_gateway_api_controller }}-task.yaml"
+      when: install_gateway_api_controller != "none"

@@ -1,0 +1,38 @@
+    - name: Install NGF CRDs
+      shell: |
+        kubectl kustomize "https://github.com/nginx/nginx-gateway-fabric/config/crd/gateway-api/standard?ref=v{{ nginx_gateway_helm_chart_version }}" | kubectl apply -f -
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Install NGINX Gateway Fabric
+      shell: |
+        helm upgrade --install ngf oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
+          --create-namespace \
+          -n nginx-gateway \
+          --version {{ nginx_gateway_helm_chart_version }} \
+          --set nginxGateway.replicas={{ gateway_api_controller_replicas }}
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Wait for NGF to become available
+      command: >
+        kubectl wait --timeout=5m
+        -n nginx-gateway
+        deployment/ngf-nginx-gateway-fabric
+        --for=condition=Available
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      retries: 20
+      delay: 15
+      register: ngf_rollout
+      until: ngf_rollout.rc == 0
+
+    - name: Get NGF deployment status
+      shell: kubectl get pods -n nginx-gateway -l app.kubernetes.io/name=nginx-gateway-fabric
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: ngf_status
+
+    - name: Show NGF status
+      debug:
+        var: ngf_status.stdout

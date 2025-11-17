@@ -11,4 +11,8 @@
 
     - name: "Install Gateway API Controller ({{ install_gateway_api_controller }})"
       include_tasks: "07-install-gateway-api-controller-{{ install_gateway_api_controller }}-task.yaml"
-      when: install_gateway_api_controller != "none"
+      when: install_gateway_api_controller != "none" and install_gateway_api_controller != "traefik"
+
+    - name: "Install Traefik"
+      include_tasks: "07-install-traefik-task.yaml"
+      when: install_gateway_api_controller == "traefik"

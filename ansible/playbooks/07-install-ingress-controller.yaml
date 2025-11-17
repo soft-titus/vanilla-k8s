@@ -9,6 +9,10 @@
 
   tasks:
 
-    - name: "Install Ingress Controller ({{ install_ingress_controller }})"
+    - name: "Install Ingress Controller"
       include_tasks: "07-install-ingress-controller-{{ install_ingress_controller }}-task.yaml"
-      when: install_ingress_controller != "none"
+      when: install_ingress_controller != "none" and install_ingress_controller != "traefik"
+
+    - name: "Install Traefik"
+      include_tasks: "07-install-traefik-task.yaml"
+      when: install_ingress_controller == "traefik" and install_gateway_api_controller != "traefik"

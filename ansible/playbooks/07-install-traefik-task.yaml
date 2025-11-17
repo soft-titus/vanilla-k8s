@@ -19,17 +19,25 @@
       set_fact:
         resolved_traefik_chart_version: "{{ traefik_chart_version.stdout | trim }}"
 
-    - name: Install or upgrade Traefik Ingress Controller ({{ resolved_traefik_chart_version }})
+    - name: Install or upgrade Traefik ({{ resolved_traefik_chart_version }})
       shell: |
         helm upgrade --install traefik traefik/traefik \
           --namespace traefik \
           --create-namespace \
           --version {{ resolved_traefik_chart_version }} \
+          {% if not install_metallb | bool %} \
           --set service.type=NodePort \
           --set service.spec.externalTrafficPolicy=Local \
           --set ports.web.nodePort=32080 \
           --set ports.websecure.nodePort=32443 \
-          --set deployment.replicas={{ ingress_controller_replicas }}
+          {% endif %}
+          --set deployment.replicas={{ traefik_replicas }} \
+          {% if install_gateway_api_controller == "traefik" %} \
+          --set providers.kubernetesGateway.enabled=true \
+          --set gateway.namespacePolicy=All \
+          --set gateway.listeners.web.namespacePolicy.from=All \
+          {% endif %}
+          --set providers.kubernetesIngress.enabled={{ 'true' if install_ingress_controller == 'traefik' else 'false' }} \
       environment:
         KUBECONFIG: "{{ kubeconfig }}"
 

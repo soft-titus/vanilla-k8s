@@ -15,6 +15,7 @@ Ideal for learning, homelab, testing, or local development.
 - Scripts to start, stop, restart, and delete nodes
 - Optional installation of Kubernetes components:
   - MetalLB
+  - Gateway API Controller (envoy, nginx or traefik)
   - Ingress Controller (nginx or traefik)
   - Longhorn CSI Driver
   - Metrics Server

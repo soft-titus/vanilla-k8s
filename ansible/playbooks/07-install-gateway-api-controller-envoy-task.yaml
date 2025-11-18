@@ -1,0 +1,121 @@
+    - name: Install Envoy-Gateway
+      shell: |
+        helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
+          --create-namespace \
+          -n envoy-gateway-system \
+          --version {{ envoy_gateway_helm_chart_version }} \
+          --set deployment.replicas={{ gateway_api_controller_replicas }}
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Wait for Envoy-Gateway to become available
+      command: >
+        kubectl wait --timeout=5m
+        -n envoy-gateway-system
+        deployment/envoy-gateway
+        --for=condition=Available
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: eg_rollout
+      until: eg_rollout.rc == 0
+
+    - name: Get Envoy-Gateway deployment status
+      shell: kubectl get pods -n envoy-gateway-system -l app.kubernetes.io/instance=eg
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: eg_status
+
+    - name: Show Envoy-Gateway status
+      debug:
+        var: eg_status.stdout
+
+    - name: Create Gateway-Class
+      shell: |
+        kubectl apply -f - <<EOF
+        apiVersion: gateway.networking.k8s.io/v1
+        kind: GatewayClass
+        metadata:
+          name: eg
+        spec:
+          controllerName: gateway.envoyproxy.io/gatewayclass-controller
+        EOF
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Create Gateway
+      shell: |
+        kubectl apply -f - <<EOF
+        apiVersion: gateway.networking.k8s.io/v1
+        kind: Gateway
+        metadata:
+          name: eg
+          namespace: default
+        spec:
+          gatewayClassName: eg
+          listeners:
+          - name: http
+            port: 80
+            protocol: HTTP
+        EOF
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - block:
+
+        - name: Get Gateway NodePorts
+          shell: |
+            kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=eg -o jsonpath='{.items[0].spec.ports[?(@.name=="http-80")].nodePort}'
+          register: gateway_ports
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+
+        - name: Parse Gateway NodePort values
+          set_fact:
+            gateway_http_port: "{{ gateway_ports.stdout }}"
+
+        - name: Backup HAProxy configuration
+          delegate_to: "{{ item }}"
+          loop: "{{ groups['k8s_lb'] }}"
+          become: true
+          copy:
+            src: /etc/haproxy/haproxy.cfg
+            dest: /etc/haproxy/haproxy.cfg.bak
+            remote_src: true
+
+        - name: Update HAProxy configuration for Envoy-Gateway
+          delegate_to: "{{ item }}"
+          loop: "{{ groups['k8s_lb'] }}"
+          become: true
+          blockinfile:
+            path: /etc/haproxy/haproxy.cfg
+            marker: "# {mark} ANSIBLE MANAGED Envoy-Gateway"
+            block: |
+              frontend eg_http_front
+                  bind *:{{ gateway_api_external_lb_port }}
+                  default_backend eg_http_backend
+
+              backend eg_http_backend
+                  balance roundrobin
+                  option forwardfor
+              {% for node in control_plane_nodes %}
+                  server {{ node.name }} {{ node.ip }}:{{ gateway_http_port }} check fall 3 rise 2
+              {% endfor %}
+              {% for node in worker_nodes %}
+                  server {{ node.name }} {{ node.ip }}:{{ gateway_http_port }} check fall 3 rise 2
+              {% endfor %}
+
+        - name: Validate HAProxy configuration
+          delegate_to: "{{ item }}"
+          loop: "{{ groups['k8s_lb'] }}"
+          become: true
+          command: haproxy -c -f /etc/haproxy/haproxy.cfg
+
+        - name: Restart HAProxy service
+          delegate_to: "{{ item }}"
+          loop: "{{ groups['k8s_lb'] }}"
+          become: true
+          systemd:
+            name: haproxy
+            state: restarted
+
+      when: not install_metallb | bool

@@ -80,3 +80,22 @@
       environment:
         KUBECONFIG: "{{ kubeconfig }}"
       run_once: true
+
+    - name: Set KUBECONFIG environment variable
+      lineinfile:
+        path: /home/ubuntu/.bashrc
+        line: 'export KUBECONFIG=~/.kube/config'
+        state: present
+        create: yes
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+
+    - name: Set KUBE_EDITOR environment variable
+      lineinfile:
+        path: /home/ubuntu/.bashrc
+        line: "export KUBE_EDITOR={{ kube_editor }}"
+        state: present
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'

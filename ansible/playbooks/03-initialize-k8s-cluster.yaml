@@ -46,3 +46,22 @@
       when: allow_scheduling_on_master_nodes | bool
       register: taint_result
       changed_when: "'taint' in taint_result.stdout or 'taint' in taint_result.stderr"
+
+    - name: Set KUBECONFIG environment variable
+      lineinfile:
+        path: /home/ubuntu/.bashrc
+        line: 'export KUBECONFIG=~/.kube/config'
+        state: present
+        create: yes
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+
+    - name: Set KUBE_EDITOR environment variable
+      lineinfile:
+        path: /home/ubuntu/.bashrc
+        line: "export KUBE_EDITOR={{ kube_editor }}"
+        state: present
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'

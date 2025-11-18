@@ -121,6 +121,8 @@ INSTALL_FLUX="${INSTALL_FLUX}"
 FLUX_VERSION="${FLUX_VERSION}"
 INSTALL_ARGOCD_CLI="${INSTALL_ARGOCD_CLI}"
 ARGOCD_CLI_VERSION="${ARGOCD_CLI_VERSION}"
+# editor to use when execute 'kubectl edit'
+KUBE_EDITOR="${KUBE_EDITOR}"
 
 for NODE in "${NODES[@]}"; do
   read -r NAME MAC IP CPU MEM DISK <<< "$NODE"
@@ -214,6 +216,8 @@ flux_version: "$FLUX_VERSION"
 
 install_argocd_cli: $INSTALL_ARGOCD_CLI
 argocd_cli_version: "$ARGOCD_CLI_VERSION"
+
+kube_editor: "$KUBE_EDITOR"
 EOF
 
 echo "Generated Ansible vars file: ${VARS_OUTPUT_PATH}"

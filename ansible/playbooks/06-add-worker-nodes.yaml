@@ -1,6 +1,9 @@
 - name: Add worker nodes
   hosts: k8s_workers
   become: yes
+  vars_files:
+    - ../vars.yaml
+    
   vars:
     kubeconfig: /etc/kubernetes/admin.conf
     kube_home: /home/ubuntu
@@ -67,3 +70,22 @@
         owner: ubuntu
         group: ubuntu
         mode: '0600'
+
+    - name: Set KUBECONFIG environment variable
+      lineinfile:
+        path: /home/ubuntu/.bashrc
+        line: 'export KUBECONFIG=~/.kube/config'
+        state: present
+        create: yes
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+
+    - name: Set KUBE_EDITOR environment variable
+      lineinfile:
+        path: /home/ubuntu/.bashrc
+        line: "export KUBE_EDITOR={{ kube_editor }}"
+        state: present
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'

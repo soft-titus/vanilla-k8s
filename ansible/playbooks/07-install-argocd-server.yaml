@@ -46,7 +46,7 @@
         command: >
           kubectl rollout status deployment/argocd-server
           -n argocd
-          --timeout=300s
+          --timeout=5m
         environment:
           KUBECONFIG: "{{ kubeconfig }}"
 

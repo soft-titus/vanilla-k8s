@@ -44,7 +44,7 @@
         command: >
           kubectl rollout status deployment/metrics-server
           -n kube-system
-          --timeout=180s
+          --timeout=5m
           --kubeconfig {{ kubeconfig_path }}
 
       - name: Verify Metrics Server is running

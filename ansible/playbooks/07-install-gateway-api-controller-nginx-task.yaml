@@ -25,8 +25,6 @@
         --for=condition=Available
       environment:
         KUBECONFIG: "{{ kubeconfig }}"
-      retries: 20
-      delay: 15
       register: ngf_rollout
       until: ngf_rollout.rc == 0
 

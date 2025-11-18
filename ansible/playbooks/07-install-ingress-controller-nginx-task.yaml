@@ -75,11 +75,17 @@
               {% for node in control_plane_nodes %}
                   server {{ node.name }} {{ node.ip }}:{{ ingress_http_port }} check fall 3 rise 2
               {% endfor %}
+              {% for node in worker_nodes %}
+                  server {{ node.name }} {{ node.ip }}:{{ ingress_http_port }} check fall 3 rise 2
+              {% endfor %}
 
               backend ingress_https_backend
                   balance roundrobin
                   option forwardfor
               {% for node in control_plane_nodes %}
+                  server {{ node.name }} {{ node.ip }}:{{ ingress_https_port }} check fall 3 rise 2
+              {% endfor %}
+              {% for node in worker_nodes %}
                   server {{ node.name }} {{ node.ip }}:{{ ingress_https_port }} check fall 3 rise 2
               {% endfor %}
 

@@ -10,6 +10,9 @@
           --create-namespace \
           -n nginx-gateway \
           --version {{ nginx_gateway_helm_chart_version }} \
+          {% if not install_metallb | bool %} \
+          --set nginx.service.type=NodePort \
+          {% endif %}
           --set nginxGateway.replicas={{ gateway_api_controller_replicas }}
       environment:
         KUBECONFIG: "{{ kubeconfig }}"
@@ -36,3 +39,81 @@
     - name: Show NGF status
       debug:
         var: ngf_status.stdout
+
+    - name: Create Gateway
+      shell: |
+        kubectl apply -f - <<EOF
+        apiVersion: gateway.networking.k8s.io/v1
+        kind: Gateway
+        metadata:
+          name: gateway
+          namespace: default
+        spec:
+          gatewayClassName: nginx
+          listeners:
+          - name: http
+            port: 80
+            protocol: HTTP
+        EOF
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - block:
+
+        - name: Get Gateway NodePorts
+          shell: |
+            kubectl get svc gateway-nginx -n default -o jsonpath='{.spec.ports[?(@.name=="port-80")].nodePort}'
+          register: gateway_ports
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+
+        - name: Parse Gateway NodePort values
+          set_fact:
+            gateway_http_port: "{{ gateway_ports.stdout }}"
+
+        - name: Backup HAProxy configuration
+          delegate_to: "{{ item }}"
+          loop: "{{ groups['k8s_lb'] }}"
+          become: true
+          copy:
+            src: /etc/haproxy/haproxy.cfg
+            dest: /etc/haproxy/haproxy.cfg.bak
+            remote_src: true
+
+        - name: Update HAProxy configuration for NGINX Gateway Fabric
+          delegate_to: "{{ item }}"
+          loop: "{{ groups['k8s_lb'] }}"
+          become: true
+          blockinfile:
+            path: /etc/haproxy/haproxy.cfg
+            marker: "# {mark} ANSIBLE MANAGED NGF"
+            block: |
+              frontend ngf_http_front
+                  bind *:{{ gateway_api_external_lb_port }}
+                  default_backend ngf_http_backend
+
+              backend ngf_http_backend
+                  balance roundrobin
+                  option forwardfor
+              {% for node in control_plane_nodes %}
+                  server {{ node.name }} {{ node.ip }}:{{ gateway_http_port }} check fall 3 rise 2
+              {% endfor %}
+              {% for node in worker_nodes %}
+                  server {{ node.name }} {{ node.ip }}:{{ gateway_http_port }} check fall 3 rise 2
+              {% endfor %}
+
+        - name: Validate HAProxy configuration
+          delegate_to: "{{ item }}"
+          loop: "{{ groups['k8s_lb'] }}"
+          become: true
+          command: haproxy -c -f /etc/haproxy/haproxy.cfg
+
+        - name: Restart HAProxy service
+          delegate_to: "{{ item }}"
+          loop: "{{ groups['k8s_lb'] }}"
+          become: true
+          systemd:
+            name: haproxy
+            state: restarted
+
+      when: not install_metallb | bool

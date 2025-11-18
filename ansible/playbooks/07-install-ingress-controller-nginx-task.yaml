@@ -31,6 +31,14 @@
       debug:
         var: ingress_nginx_status.stdout
 
+    - name: Update ingress-nginx-controller service to LoadBalancer
+      shell: |
+        kubectl patch svc ingress-nginx-controller -n ingress-nginx \
+          -p '{"spec": {"type": "LoadBalancer"}}'
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      when: install_metallb | bool
+
     - block:
 
         - name: Get ingress-nginx NodePorts

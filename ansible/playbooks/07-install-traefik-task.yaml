@@ -83,7 +83,30 @@
             dest: /etc/haproxy/haproxy.cfg.bak
             remote_src: true
 
-        - name: Update HAProxy configuration for Traefik
+        - name: Update HAProxy configuration for Traefik Gateway
+          delegate_to: "{{ item }}"
+          loop: "{{ groups['k8s_lb'] }}"
+          become: true
+          blockinfile:
+            path: /etc/haproxy/haproxy.cfg
+            marker: "# {mark} ANSIBLE MANAGED TRAEFIK Gateway"
+            block: |
+              frontend traefik_gateway_http_front
+                  bind *:{{ gateway_api_external_lb_port }}
+                  default_backend traefik_gateway_http_backend
+
+              backend traefik_gateway_http_backend
+                  balance roundrobin
+                  option forwardfor
+              {% for node in control_plane_nodes %}
+                  server {{ node.name }} {{ node.ip }}:{{ traefik_http_port }} check fall 3 rise 2
+              {% endfor %}
+              {% for node in worker_nodes %}
+                  server {{ node.name }} {{ node.ip }}:{{ traefik_http_port }} check fall 3 rise 2
+              {% endfor %}
+          when: install_gateway_api_controller == "traefik"
+
+        - name: Update HAProxy configuration for Traefik Ingress
           delegate_to: "{{ item }}"
           loop: "{{ groups['k8s_lb'] }}"
           become: true
@@ -118,6 +141,7 @@
               {% for node in worker_nodes %}
                   server {{ node.name }} {{ node.ip }}:{{ traefik_https_port }} check fall 3 rise 2
               {% endfor %}
+          when: install_ingress_controller == "traefik"
 
         - name: Validate HAProxy configuration
           delegate_to: "{{ item }}"

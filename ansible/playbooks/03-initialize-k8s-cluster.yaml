@@ -60,7 +60,7 @@
     - name: Set KUBE_EDITOR environment variable
       lineinfile:
         path: /home/ubuntu/.bashrc
-        line: "export KUBE_EDITOR={{ kube_editor }}"
+        line: "export KUBE_EDITOR='{{ kube_editor }}'"
         state: present
         owner: ubuntu
         group: ubuntu

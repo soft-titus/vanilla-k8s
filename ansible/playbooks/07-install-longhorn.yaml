@@ -67,7 +67,7 @@
             name: multipathd
             state: restarted
 
-      when: install_longhorn | bool
+      when: (install_longhorn | bool) or (prepare_longhorn_requirements | bool)
 
 - name: Install Longhorn
   hosts: k8s_masters[0]

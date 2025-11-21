@@ -11,11 +11,18 @@
 
     - block:
 
-        - name: Ensure Metrics Server is installed before VPA
+        - name: Check if Metrics Server deployment exists
+          command: kubectl -n kube-system get deployment metrics-server
+          environment:
+            KUBECONFIG: "{{ kubeconfig }}"
+          register: metrics_server_check
+          ignore_errors: yes
+
+        - name: Fail if Metrics Server deployment does not exist
           assert:
             that:
-              - install_metrics_server | bool
-            fail_msg: "Metrics Server must be installed before deploying VPA"
+              - metrics_server_check.rc == 0
+            fail_msg: "Metrics Server must be installed and running before deploying VPA"
 
         - name: Clone Kubernetes Autoscaler repository
           git:
